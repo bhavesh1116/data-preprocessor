@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataSense AI — Smart Data Preprocessor</title>
+  <meta name="description" content="Upload any dataset, auto-clean it with AI, get smart insights, and download in your original format. Supports CSV, Excel, JSON, TSV." />
+  <link rel="stylesheet" href="index.css" />
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── TOPBAR ─────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <div class="logo-icon">✦</div>
+      <span>DataSense AI</span>
+    </div>
+    <div class="topbar-right">
+      <span class="badge">Beta</span>
+      <span style="font-size:0.78rem;color:var(--text3)">Smart Data Preprocessor</span>
+    </div>
+  </header>
+
+  <!-- ── MAIN ───────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- UPLOAD SECTION -->
+    <section id="upload-section">
+      <div class="upload-zone" id="upload-zone">
+        <span class="upload-icon"><svg class="svg-icon" style="width:32px;height:32px;margin-bottom:10px" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg></span>
+        <h2>Drop your dataset here</h2>
+        <p>or click to browse your files</p>
+        <div class="format-pills">
+          <span class="format-pill">.CSV</span>
+          <span class="format-pill">.TSV</span>
+          <span class="format-pill">.JSON</span>
+          <span class="format-pill">.XLSX</span>
+          <span class="format-pill">.XLS</span>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept=".csv,.tsv,.json,.xlsx,.xls" style="display:none" />
+    </section>
+
+    <!-- FILE INFO BAR -->
+    <div id="file-info-bar">
+      <div class="file-meta">
+        <div class="file-badge">📄</div>
+        <div>
+          <div class="file-name">—</div>
+          <div class="file-sub">—</div>
+        </div>
+      </div>
+      <div class="file-stats">
+        <div class="file-stat" data-stat="rows">
+          <div class="file-stat-val">—</div>
+          <div class="file-stat-lbl">Rows</div>
+        </div>
+        <div class="file-stat" data-stat="cols">
+          <div class="file-stat-val">—</div>
+          <div class="file-stat-lbl">Columns</div>
+        </div>
+        <div class="file-stat" data-stat="nulls">
+          <div class="file-stat-val">—</div>
+          <div class="file-stat-lbl">Nulls</div>
+        </div>
+      </div>
+      <div class="bar-actions">
+        <button class="btn btn-primary" id="btn-process">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Preprocess
+        </button>
+        <button class="btn btn-secondary" id="btn-reset">
+          <span>↺</span> Reset
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ NOISE DASHBOARD (NEW) ══════════════════════════ -->
+    <div id="noise-dashboard" style="display:none">
+      <div class="noise-header">
+        <div class="noise-title-row">
+          <span class="noise-title">🔬 Data Quality Report</span>
+          <span class="noise-subtitle">Detected issues before preprocessing</span>
+        </div>
+      </div>
+      <div class="noise-body">
+        <!-- Noise Score Ring -->
+        <div class="noise-score-wrap">
+          <svg class="noise-ring" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="10"/>
+            <circle cx="60" cy="60" r="50" fill="none" id="noise-ring-fill"
+                    stroke="#ef4444" stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="314" stroke-dashoffset="314"
+                    transform="rotate(-90 60 60)" style="transition:stroke-dashoffset 1s ease,stroke 1s ease"/>
+          </svg>
+          <div class="noise-score-label">
+            <div class="noise-score-num" id="noise-score-num">—</div>
+            <div class="noise-score-text" id="noise-score-text">Noise Score</div>
+          </div>
+        </div>
+        <!-- Issue Cards -->
+        <div class="noise-issues">
+          <!-- Nulls -->
+          <div class="issue-card" id="issue-nulls">
+            <div class="issue-header" onclick="App.toggleIssue('nulls')">
+              <div class="issue-left">
+                <div class="issue-icon" style="background:rgba(239,68,68,0.15);color:#f87171">⬜</div>
+                <div>
+                  <div class="issue-name">Missing Values</div>
+                  <div class="issue-count" id="issue-nulls-count">—</div>
+                </div>
+              </div>
+              <div class="issue-right">
+                <div class="issue-pct" id="issue-nulls-pct" style="color:#f87171">—%</div>
+                <span class="issue-toggle">▾</span>
+              </div>
+            </div>
+            <div class="issue-detail" id="issue-nulls-detail">
+              <div class="issue-cols" id="null-cols"></div>
+              <div class="handling-section">
+                <div class="handling-title">🩹 How to Handle:</div>
+                <div class="handling-opts" id="handle-nulls">
+                  <label class="h-opt"><input type="radio" name="handle-null" value="median" checked> Fill with Median</label>
+                  <label class="h-opt"><input type="radio" name="handle-null" value="mean"> Fill with Mean</label>
+                  <label class="h-opt"><input type="radio" name="handle-null" value="mode"> Fill with Mode</label>
+                  <label class="h-opt"><input type="radio" name="handle-null" value="drop"> Drop Rows</label>
+                  <label class="h-opt"><input type="radio" name="handle-null" value="unknown"> Mark "Unknown"</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Duplicates -->
+          <div class="issue-card" id="issue-duplicates">
+            <div class="issue-header" onclick="App.toggleIssue('duplicates')">
+              <div class="issue-left">
+                <div class="issue-icon" style="background:rgba(245,158,11,0.15);color:#fbbf24">⧉</div>
+                <div>
+                  <div class="issue-name">Duplicate Rows</div>
+                  <div class="issue-count" id="issue-dup-count">—</div>
+                </div>
+              </div>
+              <div class="issue-right">
+                <div class="issue-pct" id="issue-dup-pct" style="color:#fbbf24">—%</div>
+                <span class="issue-toggle">▾</span>
+              </div>
+            </div>
+            <div class="issue-detail" id="issue-duplicates-detail">
+              <div class="handling-section">
+                <div class="handling-title">🧹 How to Handle:</div>
+                <div class="handling-opts" id="handle-dups">
+                  <label class="h-opt"><input type="radio" name="handle-dup" value="remove_all" checked> Remove All Duplicates</label>
+                  <label class="h-opt"><input type="radio" name="handle-dup" value="keep_first"> Keep First Occurrence</label>
+                  <label class="h-opt"><input type="radio" name="handle-dup" value="keep"> Keep As-Is</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Outliers -->
+          <div class="issue-card" id="issue-outliers">
+            <div class="issue-header" onclick="App.toggleIssue('outliers')">
+              <div class="issue-left">
+                <div class="issue-icon" style="background:rgba(139,92,246,0.15);color:#a78bfa">◈</div>
+                <div>
+                  <div class="issue-name">Outliers</div>
+                  <div class="issue-count" id="issue-out-count">—</div>
+                </div>
+              </div>
+              <div class="issue-right">
+                <div class="issue-pct" id="issue-out-pct" style="color:#a78bfa">—%</div>
+                <span class="issue-toggle">▾</span>
+              </div>
+            </div>
+            <div class="issue-detail" id="issue-outliers-detail">
+              <div class="issue-cols" id="outlier-cols"></div>
+              <div class="handling-section">
+                <div class="handling-title">📐 How to Handle:</div>
+                <div class="handling-opts" id="handle-outliers">
+                  <label class="h-opt"><input type="radio" name="handle-out" value="keep" checked> Keep As-Is</label>
+                  <label class="h-opt"><input type="radio" name="handle-out" value="cap"> Cap to IQR Bounds</label>
+                  <label class="h-opt"><input type="radio" name="handle-out" value="mean"> Replace with Mean</label>
+                  <label class="h-opt"><input type="radio" name="handle-out" value="median"> Replace with Median</label>
+                  <label class="h-opt"><input type="radio" name="handle-out" value="remove"> Remove Rows</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Type Issues -->
+          <div class="issue-card" id="issue-typeissues">
+            <div class="issue-header" onclick="App.toggleIssue('typeissues')">
+              <div class="issue-left">
+                <div class="issue-icon" style="background:rgba(6,182,212,0.15);color:#22d3ee"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></div>
+                <div>
+                  <div class="issue-name">Type Issues</div>
+                  <div class="issue-count" id="issue-type-count">—</div>
+                </div>
+              </div>
+              <div class="issue-right">
+                <div class="issue-pct" id="issue-type-pct" style="color:#22d3ee">—</div>
+                <span class="issue-toggle">▾</span>
+              </div>
+            </div>
+            <div class="issue-detail" id="issue-typeissues-detail">
+              <div class="issue-cols" id="type-cols"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TRANSFORMATION OPTIONS ────────────────────────────── -->
+    <div id="transform-options" style="display:none; background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius-lg); padding:20px; margin-bottom:20px;">
+      <div style="font-size:0.9rem; font-weight:700; color:var(--text); margin-bottom:14px; display:flex; align-items:center; gap:8px;">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="m16 11 5 5-5 5"/><path d="M21 16H9a7 7 0 0 1-7-7V4"/></svg>
+        Data Transformations (Backend Options)
+      </div>
+      <div style="display:flex; gap:20px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+          <div style="font-size:0.75rem; color:var(--text2); margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em">Numeric Scaling</div>
+          <div class="handling-opts" id="handle-scale">
+            <label class="h-opt"><input type="radio" name="handle-scale" value="none" checked> None</label>
+            <label class="h-opt"><input type="radio" name="handle-scale" value="standard"> Standard Scaler</label>
+            <label class="h-opt"><input type="radio" name="handle-scale" value="minmax"> Min-Max Scaler</label>
+          </div>
+        </div>
+        <div style="flex:1; min-width:200px;">
+          <div style="font-size:0.75rem; color:var(--text2); margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em">Categorical Encoding</div>
+          <div class="handling-opts" id="handle-encode">
+            <label class="h-opt"><input type="radio" name="handle-encode" value="none" checked> None</label>
+            <label class="h-opt"><input type="radio" name="handle-encode" value="label"> Label Encoding</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── WORKSPACE ─────────────────────────────────────── -->
+    <div id="workspace">
+
+      <!-- LEFT PANEL -->
+      <div class="ws-left">
+
+        <!-- DATA TABLE CARD -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg> Data View</div>
+            <div class="tabs" id="data-tabs">
+              <button class="tab active" data-tab="original">Original</button>
+              <button class="tab" data-tab="processed">Processed</button>
+              <button class="tab" data-tab="heatmap">Heatmap</button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:12px">
+
+            <!-- DIFF LEGEND -->
+            <div class="diff-legend" id="diff-legend" style="display:none">
+              <span><div class="dl-box dl-changed"></div> Changed cell</span>
+              <span><div class="dl-box dl-null"></div> Null/Missing</span>
+              <span><div class="dl-box dl-outlier"></div> Outlier</span>
+            </div>
+
+            <!-- PANELS -->
+            <div class="tab-panel data-panel active" id="panel-original">
+              <div id="original-table">
+                <div class="empty"><div class="empty-icon"><svg class="svg-icon" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></div>No data loaded yet</div>
+              </div>
+            </div>
+            <div class="tab-panel data-panel" id="panel-processed">
+              <div id="processed-table">
+                <div class="empty"><div class="empty-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>Run preprocessing first</div>
+              </div>
+            </div>
+            <div class="tab-panel data-panel" id="panel-heatmap">
+              <!-- Heatmap tabs -->
+              <div style="display:flex;gap:8px;margin-bottom:12px">
+                <div class="tabs" id="heat-tabs">
+                  <button class="tab active" data-tab="original">Before</button>
+                  <button class="tab" data-tab="processed">After</button>
+                </div>
+              </div>
+              <div class="tab-panel heat-panel active" id="hpanel-original">
+                <div id="heatmap-original"><div class="empty"><div class="empty-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></div>Load a file to see heatmap</div></div>
+              </div>
+              <div class="tab-panel heat-panel" id="hpanel-processed">
+                <div id="heatmap-processed"><div class="empty"><div class="empty-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></div>Run preprocessing first</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROCESSING TIMELINE -->
+        <div class="card" id="timeline-container" style="display:none">
+          <div class="card-header">
+            <div class="card-title"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg> Processing Timeline</div>
+          </div>
+          <div class="card-body">
+            <div class="timeline" id="timeline-list"></div>
+          </div>
+        </div>
+
+        <!-- DOWNLOAD CARD -->
+        <div class="card" id="download-area" style="display:none">
+          <div class="card-header">
+            <div class="card-title"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Download</div>
+          </div>
+          <div class="card-body">
+            <div class="download-grid">
+              <div class="download-card" onclick="document.getElementById('btn-download-orig').click()">
+                <div class="dl-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg></div>
+                <div class="dl-label">Cleaned Data</div>
+                <div class="dl-sub">Same format as uploaded</div>
+              </div>
+              <div class="download-card" onclick="document.getElementById('btn-download-py').click()">
+                <div class="dl-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M10 9a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V9Z"/><path d="M14 15a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v10Z"/></svg></div>
+                <div class="dl-label">Python Recipe</div>
+                <div class="dl-sub">Pandas preprocessing code</div>
+              </div>
+              <div class="download-card" onclick="document.getElementById('btn-download-seaborn').click()">
+                <div class="dl-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div>
+                <div class="dl-label">Seaborn Viz</div>
+                <div class="dl-sub">8-chart Python script</div>
+              </div>
+            </div>
+            <button class="btn btn-green" id="btn-download-orig" disabled style="display:none">⬇ Download</button>
+            <button class="btn btn-secondary" id="btn-download-py" style="display:none"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M10 9a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V9Z"/><path d="M14 15a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v10Z"/></svg> Pandas Recipe</button>
+            <button class="btn btn-secondary" id="btn-download-seaborn" style="display:none"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg> Seaborn Viz</button>
+
+            <!-- Python code preview -->
+            <div style="margin-top:16px">
+              <div class="section-header">
+                <div class="section-title" style="font-size:0.82rem;color:var(--text2)"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M10 9a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V9Z"/><path d="M14 15a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v10Z"/></svg> Auto-generated Python Code</div>
+                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('btn-download-py').click()">Download .py</button>
+              </div>
+              <pre class="code-block" id="python-code">
+<span class="cm"># Run preprocessing first to see generated code</span></pre>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /ws-left -->
+
+      <!-- RIGHT PANEL -->
+      <div class="ws-right">
+
+        <!-- HEALTH SCORE -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Data Health Score</div>
+          </div>
+          <div class="card-body">
+            <div style="text-align:center;margin-bottom:12px">
+              <div class="health-score-val great" id="health-score-val">—</div>
+              <div style="font-size:0.75rem;color:var(--text3)" id="health-label">Upload a file</div>
+            </div>
+            <div style="position:relative;height:200px">
+              <canvas id="health-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- INSIGHTS ────────────────────────────────── -->
+        <div class="card" style="flex:1">
+          <div class="card-header">
+            <div class="card-title"><svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Insights</div>
+            <div class="tabs" id="insight-tabs" style="flex-wrap:wrap">
+              <button class="tab active" data-tab="story">Story</button>
+              <button class="tab" data-tab="columns">Columns</button>
+              <button class="tab" data-tab="charts">Charts</button>
+              <button class="tab" data-tab="nlq">NLQ</button>
+              <button class="tab" data-tab="pyvis"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M10 9a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V9Z"/><path d="M14 15a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v10Z"/></svg> Viz</button>
+            </div>
+          </div>
+          <div class="card-body">
+
+            <!-- Story Panel -->
+            <div class="tab-panel insight-panel active" id="ipanel-story">
+              <div class="story-card">
+                <span class="story-quote">"</span>
+                <div id="story-text" style="color:var(--text3)">Upload a dataset to generate a data story…</div>
+              </div>
+            </div>
+
+            <!-- Columns Panel -->
+            <div class="tab-panel insight-panel" id="ipanel-columns">
+              <div class="col-cards" id="col-cards">
+                <div class="empty"><div class="empty-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div>No data loaded</div>
+              </div>
+            </div>
+
+            <!-- Charts Panel (NEW) -->
+            <div class="tab-panel insight-panel" id="ipanel-charts">
+              <!-- Chart type selector -->
+              <div class="chart-selector" id="chart-selector">
+                <button class="chart-btn active" data-chart="bar"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg> Bar</button>
+                <button class="chart-btn" data-chart="line"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg> Line</button>
+                <button class="chart-btn" data-chart="pie"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z"/></svg> Pie</button>
+                <button class="chart-btn" data-chart="histogram"><svg class="svg-icon" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h.01M17 7h.01M7 17h.01M17 17h.01"/></svg> Hist</button>
+                <button class="chart-btn" data-chart="boxplot"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg> Box</button>
+                <button class="chart-btn" data-chart="correlation"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg> Corr</button>
+                <button class="chart-btn" data-chart="scatter"><svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg> Scatter</button>
+                <button class="chart-btn" data-chart="area"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 6c.6 0 1.2-.2 1.8-.6L5.3 4.2c1.2-1 2.7-1 3.9 0l1.5 1.2c1.2 1 2.7 1 3.9 0l1.5-1.2c1.2-1 2.7-1 3.9 0l1.5 1.2c.6.4 1.2.6 1.8.6"/><path d="M2 12c.6 0 1.2-.2 1.8-.6L5.3 10.2c1.2-1 2.7-1 3.9 0l1.5 1.2c1.2 1 2.7 1 3.9 0l1.5-1.2c1.2-1 2.7-1 3.9 0l.5.4"/><path d="M2 18c.6 0 1.2-.2 1.8-.6L5.3 16.2c1.2-1 2.7-1 3.9 0l1.5 1.2c1.2 1 2.7 1 3.9 0l1.5-1.2c1.2-1 2.7-1 3.9 0l.5.4"/></svg> Area</button>
+              </div>
+              <!-- Column selectors -->
+              <div class="chart-col-selectors" id="chart-col-selectors">
+                <select id="chart-col-x" class="chart-select"><option>—</option></select>
+                <span id="chart-vs-label" style="display:none;color:var(--text3);font-size:0.8rem;align-self:center">vs</span>
+                <select id="chart-col-y" class="chart-select" style="display:none"><option>—</option></select>
+              </div>
+              <!-- Chart canvas area -->
+              <div class="chart-canvas-wrap" id="chart-canvas-wrap">
+                <div class="empty"><div class="empty-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div>Upload a file to see charts</div>
+              </div>
+            </div>
+
+            <!-- NLQ Panel -->
+            <div class="tab-panel insight-panel" id="ipanel-nlq">
+              <div class="nlq-bar">
+                <span class="nlq-icon"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+                <input type="text" id="nlq-input" placeholder="Ask your data anything… e.g. 'Show rows where age is missing'" />
+                <button class="btn btn-primary btn-sm" id="btn-nlq-run">Ask</button>
+              </div>
+              <div class="nlq-suggestions" id="nlq-chips"></div>
+              <div id="nlq-message" style="font-size:0.82rem;color:var(--text2);margin-bottom:10px"></div>
+              <div id="nlq-table"></div>
+            </div>
+
+            <!-- Python Viz Panel (NEW) -->
+            <div class="tab-panel insight-panel" id="ipanel-pyvis">
+              <div class="section-header" style="margin-bottom:12px">
+                <div style="font-size:0.82rem;color:var(--text2)"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg> Seaborn Visualization Script (8 chart types)</div>
+                <button class="btn btn-secondary btn-sm" id="btn-download-seaborn2">⬇ Download</button>
+              </div>
+              <div class="pyvis-info">
+                <span class="pyvis-badge">matplotlib</span>
+                <span class="pyvis-badge">seaborn</span>
+                <span class="pyvis-badge">pandas</span>
+                <span class="pyvis-badge">numpy</span>
+              </div>
+              <pre class="code-block" id="seaborn-code" style="max-height:420px">
+<span class="cm"># Upload a dataset to generate Seaborn visualization code</span></pre>
+            </div>
+
+          </div>
+        </div>
+
+      </div><!-- /ws-right -->
+    </div><!-- /workspace -->
+
+  </main>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- SCRIPTS -->
+<script src="charts.js"></script>
+<script src="nlq.js"></script>
+<script src="exporter.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
